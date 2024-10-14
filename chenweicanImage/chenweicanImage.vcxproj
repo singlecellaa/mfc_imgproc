@@ -189,6 +189,7 @@
     <ClInclude Include="chenweicanImageDoc.h" />
     <ClInclude Include="chenweicanImageView.h" />
     <ClInclude Include="ChildFrm.h" />
+    <ClInclude Include="CHistogramDisplay.h" />
     <ClInclude Include="ClassView.h" />
     <ClInclude Include="FileView.h" />
     <ClInclude Include="framework.h" />
@@ -205,6 +206,7 @@
     <ClCompile Include="chenweicanImageDoc.cpp" />
     <ClCompile Include="chenweicanImageView.cpp" />
     <ClCompile Include="ChildFrm.cpp" />
+    <ClCompile Include="CHistogramDisplay.cpp" />
     <ClCompile Include="ClassView.cpp" />
     <ClCompile Include="FileView.cpp" />
     <ClCompile Include="MainFrm.cpp" />

@@ -217,3 +217,46 @@ BOOL CchenweicanImageDoc::ReadBMP(LPCTSTR lpszPathName)
 	file.Close();
 	return TRUE;
 }
+
+
+BOOL CchenweicanImageDoc::SaveBMP(LPCTSTR lpszPathName)
+{
+	// TODO: Add your specialized code here and/or call the base class
+	long lTotal = 0;
+	CFile file;
+	file.Open(lpszPathName, CFile::modeCreate | CFile::modeReadWrite);
+	file.Write(&bmpFH, sizeof(BITMAPFILEHEADER));
+
+	file.Write(lpbmi, sizeof(BITMAPINFOHEADER));
+
+	if (m_nColorBits == 8) // black-white
+	{
+		lTotal = imageWidth * imageHeight;
+		file.Write(&(lpbmi->bmiColors[0]), 256 * 4);
+	}
+	else if (m_nColorBits == 24)
+	{
+		lTotal = imageWidth * imageHeight * 3;
+		file.Write(m_pBits, lTotal);
+	}
+	else {
+		file.Close();
+		return FALSE;
+	}
+	file.Close();
+
+
+	return TRUE;
+}
+BOOL CchenweicanImageDoc::OnSaveDocument(LPCTSTR lpszPathName)
+{
+	if (m_nOpenMode == 1 && m_pBits != NULL)
+		SaveBMP(lpszPathName);
+	if (m_nOpenMode == 2 && image != NULL)
+	{
+		cvSaveImage((const char *)lpszPathName, image);
+	}
+	return TRUE;
+
+	return CDocument::OnSaveDocument(lpszPathName);
+}

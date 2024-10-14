@@ -24,6 +24,7 @@ public:
 public:
 	void ReadRAW(LPCTSTR lpszPathName, int nWidth, int nHeight);
 	BOOL ReadBMP(LPCTSTR lpszPathName);
+	BOOL SaveBMP(LPCTSTR lpszPathName);
 // Overrides
 public:
 	virtual BOOL OnNewDocument();
@@ -61,4 +62,5 @@ protected:
 #endif // SHARED_HANDLERS
 public:
 	virtual BOOL OnOpenDocument(LPCTSTR lpszPathName);
+	virtual BOOL OnSaveDocument(LPCTSTR lpszPathName);
 };

@@ -30,6 +30,16 @@ protected:
 
 // Implementation
 public:
+	void DrawGraph(CDC* pDC);//绘制直方图函数
+	long m_lValue[256];//红色分量灰度统计
+	double m_dValue[256];// 红色分量灰度频数
+	long m_lValueG[256]; //绿色分量灰度统计
+	double m_dValueG[256]; // 绿色分量灰度频数
+	long m_lValueB[256]; //蓝色分量灰度统计
+	double m_dValueB[256]; //蓝色分量灰度频数
+	double dMax, dMaxG, dMaxB;//红、绿、蓝频数最大值
+	BOOL m_bShow;//是否显示直方图
+
 	virtual ~CchenweicanImageView();
 #ifdef _DEBUG
 	virtual void AssertValid() const;
@@ -51,6 +61,8 @@ public:
 	afx_msg void OnUpdateViewZoomOut(CCmdUI* pCmdUI);
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
+	afx_msg void OnProcessLinetran();
+	afx_msg void OnProcessZhifangtu();
 };
 
 #ifndef _DEBUG  // debug version in chenweicanImageView.cpp

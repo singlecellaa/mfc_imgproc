@@ -15,6 +15,9 @@
 #include "MainFrm.h"
 
 #include "CHistogramDisplay.h"
+#include "SmoothDlg.h"
+
+#include <stdlib.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -40,6 +43,8 @@ BEGIN_MESSAGE_MAP(CchenweicanImageView, CScrollView)
 	ON_WM_MOUSEMOVE()
 	ON_COMMAND(ID_PROCESS_LINETRAN, &CchenweicanImageView::OnProcessLinetran)
 	ON_COMMAND(ID_PROCESS_ZHIFANGTU, &CchenweicanImageView::OnProcessZhifangtu)
+	ON_COMMAND(ID_IMAGE_TXPH, &CchenweicanImageView::OnImageTxph)
+	ON_COMMAND(ID_IMAGE_MEDIAN, &CchenweicanImageView::OnImageMedian)
 END_MESSAGE_MAP()
 
 // CchenweicanImageView construction/destruction
@@ -473,4 +478,287 @@ void CchenweicanImageView::DrawGraph(CDC* pDC)
 			pDC->SelectObject(oldPen);
 		}
 	}
+}
+
+void CchenweicanImageView::OnImageTxph()
+{
+	// TODO: Add your command handler code here
+	SmoothDlg sdlg;
+	if (sdlg.DoModal())
+	{
+		double H[3][3];//申明模板变量
+		double K = sdlg.m_nSmooth10;//H 与 K组合为8-领域平均法
+		H[0][0] = sdlg.m_nSmooth1;// 申明模板变量赋值
+		H[0][1] = sdlg.m_nSmooth2;
+		H[0][2] = sdlg.m_nSmooth3;
+		H[1][0] = sdlg.m_nSmooth4;
+		H[1][1] = sdlg.m_nSmooth5;
+		H[1][2] = sdlg.m_nSmooth6;
+		H[2][0] = sdlg.m_nSmooth7;
+		H[2][1] = sdlg.m_nSmooth8;
+		H[2][2] = sdlg.m_nSmooth9;
+		CchenweicanImageDoc* pDoc = GetDocument(); //根据自己的命名进行相应更改
+		ASSERT_VALID(pDoc);
+		unsigned char* pBits = pDoc->m_pBits;
+		if (!pBits)
+			return;
+		int nWidth = pDoc->imageWidth;
+		int nHeight = pDoc->imageHeight;
+		long lTotalR, lTotal;
+		int m, n;
+		double dValue;
+		double dThres = 100;
+		double Value[3][3];
+		unsigned char* pOldBits = NULL;
+		if (pDoc->m_nColorBits == 8)
+		{
+			pOldBits = new unsigned char[nWidth * nHeight];//分配内存
+			CopyMemory(pOldBits, pBits, nWidth * nHeight);//把图像复制到pOldBit
+			for (int i = 0; i < nHeight; i++)
+			{
+				lTotalR = i * nWidth;
+				for (int j = 0; j < nWidth; j++)
+				{
+					lTotal = lTotalR + j;
+					if (i == 0 || i == nHeight - 1 || j == 0 || j == nWidth - 1)//边缘点不作处理，直接拷贝数据
+						pBits[lTotal] = pOldBits[lTotal];
+					else//内部点作平滑处理，
+					{
+						Value[0][0] = pOldBits[lTotal - nWidth - 1];
+						Value[0][1] = pOldBits[lTotal - nWidth - 0];
+						Value[0][2] = pOldBits[lTotal - nWidth + 1];
+						Value[1][0] = pOldBits[lTotal - 0 - 1];
+						Value[1][1] = pOldBits[lTotal - 0 - 0];
+						Value[1][2] = pOldBits[lTotal - 0 + 1];
+						Value[2][0] = pOldBits[lTotal + nWidth - 1];
+						Value[2][1] = pOldBits[lTotal + nWidth - 0];
+						Value[2][2] = pOldBits[lTotal + nWidth + 1];
+						dValue = 0.0;
+						for (m = 0; m < 3; m++)
+							for (n = 0; n < 3; n++)
+								dValue = dValue + H[m][n] * Value[m][n];
+						dValue = dValue * K;
+
+						if (dValue < dThres)
+							pBits[lTotal] = int(dValue * 0.5);
+						else
+							pBits[lTotal] = int(dValue);
+
+						//pBits[lTotal] = int(dValue + 0.5);
+					}
+				}
+			}
+		}
+		
+		if (pDoc->m_nColorBits == 24)
+		{
+			pOldBits = new unsigned char[3 * nWidth * nHeight];//分配内存
+			CopyMemory(pOldBits, pBits, 3 * nWidth * nHeight);//把图像复制到pOldBit
+			for (int i = 0; i < nHeight; i++)
+			{
+				lTotalR = i * nWidth;
+				for (int j = 0; j < nWidth; j++)
+				{
+					lTotal = (lTotalR + j) * 3;
+					if (i == 0 || i == nHeight - 1 || j == 0 || j == nWidth - 1)//边缘点不作处理，直接拷贝数据
+					{
+						pBits[lTotal + 0] = pOldBits[lTotal + 0];
+						pBits[lTotal + 1] = pOldBits[lTotal + 1];
+						pBits[lTotal + 2] = pOldBits[lTotal + 2];
+					}
+					else//内部点作平滑处理，
+					{
+						Value[0][0] = pOldBits[lTotal - 3 * nWidth - 3 * 1 + 0];
+						Value[0][1] = pOldBits[lTotal - 3 * nWidth - 3 * 0 + 0];
+						Value[0][2] = pOldBits[lTotal - 3 * nWidth + 3 * 1 + 0];
+						Value[1][0] = pOldBits[lTotal - 3 * 0 - 3 * 1 + 0];
+						Value[1][1] = pOldBits[lTotal - 3 * 0 - 3 * 0 + 0];
+						Value[1][2] = pOldBits[lTotal - 3 * 0 + 3 * 1 + 0];
+						Value[2][0] = pOldBits[lTotal + 3 * nWidth - 3 * 1 + 0];
+						Value[2][1] = pOldBits[lTotal + 3 * nWidth - 3 * 0 + 0];
+						Value[2][2] = pOldBits[lTotal + 3 * nWidth + 3 * 1 + 0];
+						dValue = 0.0;
+						for (m = 0; m < 3; m++)
+							for (n = 0; n < 3; n++)
+								dValue = dValue + H[m][n] * Value[m][n];
+						dValue = dValue * K;
+						//pBits[lTotal + 0] = int(dValue + 0.5);
+						if (dValue < dThres)
+							pBits[lTotal + 0] = int(dValue * 0.5);
+						else
+							pBits[lTotal + 0] = int(dValue);
+
+						Value[0][0] = pOldBits[lTotal - 3 * nWidth - 3 * 1 + 1];
+						Value[0][1] = pOldBits[lTotal - 3 * nWidth - 3 * 0 + 1];
+						Value[0][2] = pOldBits[lTotal - 3 * nWidth + 3 * 1 + 1];
+						Value[1][0] = pOldBits[lTotal - 3 * 0 - 3 * 1 + 1];
+						Value[1][1] = pOldBits[lTotal - 3 * 0 - 3 * 0 + 1];
+						Value[1][2] = pOldBits[lTotal - 3 * 0 + 3 * 1 + 1];
+						Value[2][0] = pOldBits[lTotal + 3 * nWidth - 3 * 1 + 1];
+						Value[2][1] = pOldBits[lTotal + 3 * nWidth - 3 * 0 + 1];
+						Value[2][2] = pOldBits[lTotal + 3 * nWidth + 3 * 1 + 1];
+						dValue = 0.0;
+						for (m = 0; m < 3; m++)
+							for (n = 0; n < 3; n++)
+								dValue = dValue + H[m][n] * Value[m][n];
+						dValue = dValue * K;
+						//pBits[lTotal + 1] = int(dValue + 0.5);
+						if (dValue < dThres)
+							pBits[lTotal + 1] = int(dValue * 0.5);
+						else
+							pBits[lTotal + 1] = int(dValue);
+
+						Value[0][0] = pOldBits[lTotal - 3 * nWidth - 3 * 1 + 2];
+						Value[0][1] = pOldBits[lTotal - 3 * nWidth - 3 * 0 + 2];
+						Value[0][2] = pOldBits[lTotal - 3 * nWidth + 3 * 1 + 2];
+						Value[1][0] = pOldBits[lTotal - 3 * 0 - 3 * 1 + 2];
+						Value[1][1] = pOldBits[lTotal - 3 * 0 - 3 * 0 + 2];
+						Value[1][2] = pOldBits[lTotal - 3 * 0 + 3 * 1 + 2];
+						Value[2][0] = pOldBits[lTotal + 3 * nWidth - 3 * 1 + 2];
+						Value[2][1] = pOldBits[lTotal + 3 * nWidth - 3 * 0 + 2];
+						Value[2][2] = pOldBits[lTotal + 3 * nWidth + 3 * 1 + 2];
+						dValue = 0.0;
+						for (m = 0; m < 3; m++)
+							for (n = 0; n < 3; n++)
+								dValue = dValue + H[m][n] * Value[m][n];
+						dValue = dValue * K;
+						if (dValue < dThres)
+							pBits[lTotal + 2] = int(dValue * 0.5);
+						else
+							pBits[lTotal + 2] = int(dValue);
+					}
+				}
+			}
+		}
+		Invalidate();
+		if (pOldBits != NULL)
+			delete pOldBits; //删除临时分配内存
+	}
+}
+
+
+int compare(const void* a, const void* b) {
+	return (*(unsigned char*)a - *(unsigned char*)b);
+}
+void CchenweicanImageView::OnImageMedian()
+{
+	// TODO: Add your command handler code here
+	CchenweicanImageDoc* pDoc = GetDocument(); //根据自己的命名进行相应更改
+	ASSERT_VALID(pDoc);
+	unsigned char* pBits = pDoc->m_pBits;
+	if (!pBits)
+		return;
+	int nWidth = pDoc->imageWidth;
+	int nHeight = pDoc->imageHeight;
+	long lTotalR, lTotal;
+	int m, n;
+	double dValue;
+	
+	unsigned char* pOldBits = NULL;
+	if (pDoc->m_nColorBits == 8)
+	{
+		pOldBits = new unsigned char[nWidth * nHeight];//分配内存
+		CopyMemory(pOldBits, pBits, nWidth * nHeight);//把图像复制到pOldBit
+		for (int i = 0; i < nHeight; i++)
+		{
+			lTotalR = i * nWidth;
+			for (int j = 0; j < nWidth; j++)
+			{
+				lTotal = lTotalR + j;
+				if (i == 0 || i == nHeight - 1 || j == 0 || j == nWidth - 1)//边缘点不作处理，直接拷贝数据
+					pBits[lTotal] = pOldBits[lTotal];
+				else//内部点作平滑处理，
+				{
+					unsigned char neighborhood[9] = {
+						pOldBits[lTotal - nWidth - 1], 
+						pOldBits[lTotal - nWidth + 0],     
+						pOldBits[lTotal - nWidth + 1], 
+						pOldBits[lTotal - 1],          
+						pOldBits[lTotal + 0],              
+						pOldBits[lTotal + 1],          
+						pOldBits[lTotal + nWidth - 1], 
+						pOldBits[lTotal + nWidth + 0],     
+						pOldBits[lTotal + nWidth + 1]  
+					};
+					qsort(neighborhood, 9, sizeof(unsigned char), compare);
+					dValue = neighborhood[4];
+
+					pBits[lTotal] = int(dValue + 0.5);
+				}
+			}
+		}
+	}
+
+	if (pDoc->m_nColorBits == 24)
+	{
+		pOldBits = new unsigned char[3 * nWidth * nHeight];//分配内存
+		CopyMemory(pOldBits, pBits, 3 * nWidth * nHeight);//把图像复制到pOldBit
+		for (int i = 0; i < nHeight; i++)
+		{
+			lTotalR = i * nWidth;
+			for (int j = 0; j < nWidth; j++)
+			{
+				lTotal = (lTotalR + j) * 3;
+				if (i == 0 || i == nHeight - 1 || j == 0 || j == nWidth - 1)//边缘点不作处理，直接拷贝数据
+				{
+					pBits[lTotal + 0] = pOldBits[lTotal + 0];
+					pBits[lTotal + 1] = pOldBits[lTotal + 1];
+					pBits[lTotal + 2] = pOldBits[lTotal + 2];
+				}
+				else//内部点作平滑处理，
+				{
+					unsigned char neighborhood1[9] = {
+						pOldBits[lTotal - 3 * nWidth - 3 * 1 + 0],
+						pOldBits[lTotal - 3 * nWidth - 3 * 0 + 0],
+						pOldBits[lTotal - 3 * nWidth + 3 * 1 + 0],
+						pOldBits[lTotal - 3 * 0 - 3 * 1 + 0],
+						pOldBits[lTotal - 3 * 0 - 3 * 0 + 0],
+						pOldBits[lTotal - 3 * 0 + 3 * 1 + 0],
+						pOldBits[lTotal + 3 * nWidth - 3 * 1 + 0],
+						pOldBits[lTotal + 3 * nWidth - 3 * 0 + 0],
+						pOldBits[lTotal + 3 * nWidth + 3 * 1 + 0]
+					};
+					dValue = 0.0;
+					qsort(neighborhood1, 9, sizeof(unsigned char), compare);
+					dValue = neighborhood1[4];
+					pBits[lTotal + 0] = int(dValue + 0.5);
+
+
+					unsigned char neighborhood2[9] = {
+						pOldBits[lTotal - 3 * nWidth - 3 * 1 + 1],
+						pOldBits[lTotal - 3 * nWidth - 3 * 0 + 1],
+						pOldBits[lTotal - 3 * nWidth + 3 * 1 + 1],
+						pOldBits[lTotal - 3 * 0 - 3 * 1 + 1],
+						pOldBits[lTotal - 3 * 0 - 3 * 0 + 1],
+						pOldBits[lTotal - 3 * 0 + 3 * 1 + 1],
+						pOldBits[lTotal + 3 * nWidth - 3 * 1 + 1],
+						pOldBits[lTotal + 3 * nWidth - 3 * 0 + 1],
+						pOldBits[lTotal + 3 * nWidth + 3 * 1 + 1],
+					};
+					dValue = 0.0;
+					qsort(neighborhood2, 9, sizeof(unsigned char), compare);
+					dValue = neighborhood2[4];
+					pBits[lTotal + 1] = int(dValue + 0.5);
+
+					unsigned char neighborhood3[9] = {
+						pOldBits[lTotal - 3 * nWidth - 3 * 1 + 2],
+						pOldBits[lTotal - 3 * nWidth - 3 * 0 + 2],
+						pOldBits[lTotal - 3 * nWidth + 3 * 1 + 2],
+						pOldBits[lTotal - 3 * 0 - 3 * 1 + 2],
+						pOldBits[lTotal - 3 * 0 - 3 * 0 + 2],
+						pOldBits[lTotal - 3 * 0 + 3 * 1 + 2],
+						pOldBits[lTotal + 3 * nWidth - 3 * 1 + 2],
+						pOldBits[lTotal + 3 * nWidth - 3 * 0 + 2],
+						pOldBits[lTotal + 3 * nWidth + 3 * 1 + 2],
+					};
+					qsort(neighborhood3, 9, sizeof(unsigned char), compare);
+					dValue = neighborhood3[4];
+					pBits[lTotal + 2] = int(dValue + 0.5);
+				}
+			}
+		}
+	}
+	Invalidate();
+	if (pOldBits != NULL)
+		delete pOldBits; //删除临时分配内存
 }

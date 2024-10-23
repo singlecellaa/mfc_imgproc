@@ -84,20 +84,35 @@
 #define IDS_FIND_TAB                    302
 #define IDS_EXPLORER                    305
 #define IDS_EDIT_MENU                   306
-#define IDD_DIALOG1                     310
 #define IDD_DIALOG_HISTOGRAM            310
+#define IDD_DIALOG_SMOOTH               315
+#define IDR_TOOLBAR1                    316
+#define IDC_EDIT1                       1006
+#define IDC_EDIT2                       1007
+#define IDC_EDIT3                       1008
+#define IDC_EDIT4                       1009
+#define IDC_EDIT5                       1010
+#define IDC_EDIT6                       1011
+#define IDC_EDIT7                       1012
+#define IDC_EDIT8                       1013
+#define IDC_EDIT9                       1014
+#define IDC_EDIT10                      1015
 #define ID_32771                        32771
 #define ID_PROCESS_LINETRAN             32772
 #define ID_32773                        32773
 #define ID_PROCESS_ZHIFANGTU            32774
+#define ID_32775                        32775
+#define ID_IMAGE_TXPH                   32776
+#define ID_32777                        32777
+#define ID_IMAGE_MEDIAN                 32778
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        312
-#define _APS_NEXT_COMMAND_VALUE         32775
-#define _APS_NEXT_CONTROL_VALUE         1000
+#define _APS_NEXT_RESOURCE_VALUE        321
+#define _APS_NEXT_COMMAND_VALUE         32779
+#define _APS_NEXT_CONTROL_VALUE         1007
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
 #endif

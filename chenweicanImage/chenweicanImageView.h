@@ -63,6 +63,8 @@ public:
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	afx_msg void OnProcessLinetran();
 	afx_msg void OnProcessZhifangtu();
+	afx_msg void OnImageTxph();
+	afx_msg void OnImageMedian();
 };
 
 #ifndef _DEBUG  // debug version in chenweicanImageView.cpp

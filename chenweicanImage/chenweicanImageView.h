@@ -65,6 +65,10 @@ public:
 	afx_msg void OnProcessZhifangtu();
 	afx_msg void OnImageTxph();
 	afx_msg void OnImageMedian();
+	afx_msg void OnEnhaGradsharp();
+	afx_msg void OnEnhaSharp();
+	afx_msg void OnEdgeSobel();
+	afx_msg void OnEdgePrewitt();
 };
 
 #ifndef _DEBUG  // debug version in chenweicanImageView.cpp

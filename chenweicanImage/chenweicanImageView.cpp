@@ -45,6 +45,10 @@ BEGIN_MESSAGE_MAP(CchenweicanImageView, CScrollView)
 	ON_COMMAND(ID_PROCESS_ZHIFANGTU, &CchenweicanImageView::OnProcessZhifangtu)
 	ON_COMMAND(ID_IMAGE_TXPH, &CchenweicanImageView::OnImageTxph)
 	ON_COMMAND(ID_IMAGE_MEDIAN, &CchenweicanImageView::OnImageMedian)
+	ON_COMMAND(ID_ENHA_GRADSHARP, &CchenweicanImageView::OnEnhaGradsharp)
+	ON_COMMAND(ID_ENHA_SHARP, &CchenweicanImageView::OnEnhaSharp)
+	ON_COMMAND(ID_EDGE_SOBEL, &CchenweicanImageView::OnEdgeSobel)
+	ON_COMMAND(ID_EDGE_PREWITT, &CchenweicanImageView::OnEdgePrewitt)
 END_MESSAGE_MAP()
 
 // CchenweicanImageView construction/destruction
@@ -225,7 +229,6 @@ BOOL CchenweicanImageView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	return CScrollView::OnMouseWheel(nFlags, zDelta, pt);
 }
 
-
 void CchenweicanImageView::OnMouseMove(UINT nFlags, CPoint point)
 {
 	// TODO: Add your message handler code here and/or call default
@@ -278,7 +281,6 @@ void CchenweicanImageView::OnMouseMove(UINT nFlags, CPoint point)
 	CScrollView::OnMouseMove(nFlags, point);
 }
 
-
 void CchenweicanImageView::OnProcessLinetran()
 {
 	// TODO: Add your command handler code here
@@ -307,7 +309,6 @@ void CchenweicanImageView::OnProcessLinetran()
 	}
 	Invalidate();
 }
-
 
 void CchenweicanImageView::OnProcessZhifangtu()
 {
@@ -636,7 +637,6 @@ void CchenweicanImageView::OnImageTxph()
 	}
 }
 
-
 int compare(const void* a, const void* b) {
 	return (*(unsigned char*)a - *(unsigned char*)b);
 }
@@ -761,4 +761,425 @@ void CchenweicanImageView::OnImageMedian()
 	Invalidate();
 	if (pOldBits != NULL)
 		delete pOldBits; //删除临时分配内存
+}
+
+BOOL WINAPI GradSharp(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight, BYTE bThre)
+{
+	// 指向源图像的指针
+	unsigned char* lpSrc;
+	unsigned char* lpSrc1;
+	unsigned char* lpSrc2;
+	// 图像每行的字节数
+	LONG lLineBytes;
+	// 中间变量
+	BYTE bTemp;
+	// 计算图像每行的字节数
+	lLineBytes = (((lWidth * 8) + 31) / 32 * 4); // 每行 字节
+	for (LONG i = 0; i < lHeight-1; i++){ // 不处理下边缘
+		// 每列
+		for (LONG j = 0; j < lWidth-1; j++){ // 不处理右边缘
+			// 指向DIB第i行，第j个象素的指针
+			lpSrc = (unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - i) + j;
+			// 指向DIB第i+1行，第j个象素的指针
+			lpSrc1 = (unsigned char*)lpDIBBits + lLineBytes * (lHeight - 2 - i) + j;
+			// 指向DIB第i行，第j+1个象素的指针
+			lpSrc2 = (unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - i) + j + 1;
+			bTemp = abs((*lpSrc) - (*lpSrc1)) + abs((*lpSrc) - (*lpSrc2));
+			// 判断是否小于阈值
+			if (bTemp < 255){
+				if (bTemp >= bThre) // 判断是否大于阈值，对于小于情况，灰度值不变。
+					*lpSrc = bTemp;// 直接赋值为bTemp
+			}
+			else  
+				*lpSrc = 255; // 直接赋值为255
+		}
+	}
+	return TRUE;
+}
+
+void CchenweicanImageView::OnEnhaGradsharp()
+{
+	// TODO: Add your command handler code here
+	CchenweicanImageDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	unsigned char* pBits = pDoc->m_pBits;
+	int nWidth = pDoc->imageWidth;
+	int nHeight = pDoc->imageHeight;
+	int nColorBits = pDoc->m_nColorBits;
+	if (nColorBits != 8)
+	{
+		// 提示用户
+		MessageBox(_T("目前只支持256级灰度图像的锐化！"), _T("系统提示"),
+			MB_ICONINFORMATION | MB_OK);
+		// 返回
+		return;
+	}
+	// 阈值
+	BYTE bThre = 10;
+	// 更改光标形状
+	BeginWaitCursor();
+	// 调用GradSharp()函数进行梯度板锐化
+	if (::GradSharp(pBits, nWidth, nHeight, bThre))
+	{
+		// 设置脏标记
+		pDoc->SetModifiedFlag(TRUE);
+		// 更新视图
+		pDoc->UpdateAllViews(NULL);
+	}
+	else
+	{
+		// 提示用户
+		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+	}
+	// 恢复光标
+	EndWaitCursor();
+}
+
+BOOL WINAPI Template(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight,int iTempH, int iTempW,int iTempMX, int iTempMY,FLOAT* fpArray, FLOAT fCoef)
+{
+	// 指向复制图像的指针
+	unsigned char* lpNewDIBBits;
+	// 指向源图像的指针
+	unsigned char* lpSrc;
+	// 指向要复制区域的指针
+	unsigned char* lpDst;
+	// 计算结果
+	FLOAT fResult;
+	// 图像每行的字节数
+	LONG lLineBytes = (((lWidth * 8) + 31) / 32 * 4);
+	// 暂时分配内存，以保存新图像
+	lpNewDIBBits = new unsigned char[lLineBytes * lHeight];
+	// 判断是否内存分配失败
+	if (lpNewDIBBits == NULL)
+		return FALSE; // 分配内存失败
+	// 初始化图像为原始图像
+	memcpy(lpNewDIBBits, lpDIBBits, lLineBytes * lHeight);
+	// 行(除去边缘几行)
+	for (LONG i = iTempMY; i < lHeight - iTempH + iTempMY + 1; i++){
+		// 列(除去边缘几列)
+		for (LONG j = iTempMX; j < lWidth - iTempW + iTempMX + 1; j++){
+			// 指向新DIB第i行，第j个象素的指针
+			lpDst = (unsigned char*)lpNewDIBBits + lLineBytes * (lHeight - 1 - i) + j;
+			fResult = 0;
+			// 计算
+			for (LONG k = 0; k < iTempH; k++){
+				for (LONG l = 0; l < iTempW; l++){
+					// 指向DIB第i - iTempMY + k行，第j - iTempMX + l个象素的指针
+					lpSrc = (unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - i + iTempMY - k) + j - iTempMX + l;
+					// 保存象素值
+					fResult += (*lpSrc) * fpArray[k * iTempW + l];
+				}
+			}
+			// 乘上系数
+			fResult *= fCoef;
+			// 取绝对值
+			fResult = (FLOAT)fabs(fResult);
+			// 判断是否超过255
+			if (fResult > 255)
+				*lpDst = 255; // 直接赋值为255
+			else
+				*lpDst = (unsigned char)(fResult + 0.5);
+		}
+	}
+	// 复制变换后的图像
+	memcpy(lpDIBBits, lpNewDIBBits, lLineBytes * lHeight);
+	delete lpNewDIBBits;
+	return TRUE;
+}
+
+void CchenweicanImageView::OnEnhaSharp()
+{
+	// TODO: Add your command handler code here
+	CchenweicanImageDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	unsigned char* pBits = pDoc->m_pBits;
+	int nWidth = pDoc->imageWidth;
+	int nHeight = pDoc->imageHeight;
+	int nColorBits = pDoc->m_nColorBits;
+	if (nColorBits != 8)
+	{
+		// 提示用户
+		MessageBox(_T("目前只支持256级灰度图像的锐化！"), _T("系统提示"),
+			MB_ICONINFORMATION | MB_OK);
+		// 返回
+		return;
+	}
+	
+	int iTempH; // 模板高度
+	int iTempW; // 模板宽度
+	// 模板系数
+	FLOAT fTempC;
+	int iTempMX; // 模板中心元素X坐标
+	int iTempMY; // 模板中心元素Y坐标
+	FLOAT aValue[9]; // 模板元素数组
+	// 更改光标形状
+	BeginWaitCursor();
+	// 设置拉普拉斯模板参数
+	iTempW = 3;
+	iTempH = 3;
+	fTempC = 1.0;
+	iTempMX = 1;
+	iTempMY = 1;
+	aValue[0] = -1.0;
+	aValue[1] = -1.0;
+	aValue[2] = -1.0;
+	aValue[3] = -1.0;
+	aValue[4] = 9.0;
+	aValue[5] = -1.0;
+	aValue[6] = -1.0;
+	aValue[7] = -1.0;
+	aValue[8] = -1.0;
+	// 调用Template()函数用拉普拉斯模板锐化DIB
+	if (::Template(pBits, nWidth, nHeight,iTempH, iTempW, iTempMX, iTempMY, aValue, fTempC))
+	{
+		// 设置脏标记
+		pDoc->SetModifiedFlag(TRUE);
+		// 更新视图
+		pDoc->UpdateAllViews(NULL);
+	}
+	else
+	{
+		// 提示用户
+		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+	}
+	// 恢复光标
+	EndWaitCursor();
+}
+
+BOOL WINAPI SobelDIB(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight)
+{
+	// 指向缓存图像的指针
+	unsigned char* lpDst1;
+	unsigned char* lpDst2;
+	lWidth = (((lWidth * 8) + 31) / 32 * 4);
+	// 指向缓存DIB图像的指针
+	unsigned char* lpNewDIBBits1;
+	unsigned char* lpNewDIBBits2;
+	int iTempH;
+	int iTempW;
+	FLOAT fTempC; //模版系数
+	int iTempMX;
+	int iTempMY;
+	FLOAT aTemplate[9];  //模版数组
+	lpNewDIBBits1 = new unsigned char[lWidth * lHeight]; // 暂时分配内存，以保存新图像
+	if (lpNewDIBBits1 == NULL)
+	{
+		// 分配内存失败
+		return FALSE;
+	}
+	lpNewDIBBits2 = new unsigned char[lWidth * lHeight]; // 暂时分配内存，以保存新图像
+	if (lpNewDIBBits2 == NULL)
+	{
+		// 分配内存失败
+		return FALSE;
+	}
+	// 拷贝源图像到缓存图像中
+	lpDst1 = lpNewDIBBits1;
+	memcpy(lpNewDIBBits1, lpDIBBits, lWidth * lHeight);
+	lpDst2 = lpNewDIBBits2;
+	memcpy(lpNewDIBBits2, lpDIBBits, lWidth * lHeight);
+	// 设置Sobel模板参数
+	iTempW = 3;
+	iTempH = 3;
+	fTempC = 1.0;
+	iTempMX = 1;
+	iTempMY = 1;
+	aTemplate[0] = -1.0;
+	aTemplate[1] = -2.0;
+	aTemplate[2] = -1.0;
+	aTemplate[3] = 0.0;
+	aTemplate[4] = 0.0;
+	aTemplate[5] = 0.0;
+	aTemplate[6] = 1.0;
+	aTemplate[7] = 2.0;
+	aTemplate[8] = 1.0;
+	// 调用Template()函数
+	if (!Template(lpNewDIBBits1, lWidth, lHeight,iTempH, iTempW, iTempMX, iTempMY, aTemplate, fTempC))
+	{
+		return FALSE;
+	}
+	// 设置Sobel模板参数
+	aTemplate[0] = -1.0;
+	aTemplate[1] = 0.0;
+	aTemplate[2] = 1.0;
+	aTemplate[3] = -2.0;
+	aTemplate[4] = 0.0;
+	aTemplate[5] = 2.0;
+	aTemplate[6] = -1.0;
+	aTemplate[7] = 0.0;
+	aTemplate[8] = 1.0;
+	// 调用Template()函数
+	if (!Template(lpNewDIBBits2, lWidth, lHeight,iTempH, iTempW, iTempMX, iTempMY, aTemplate, fTempC))
+	{
+		return FALSE;
+	}
+	//求两幅缓存图像的最大值
+	for (long j = 0; j < lHeight; j++)
+	{
+		for (long i = 0; i < lWidth - 1; i++)
+		{
+			// 指向缓存图像1倒数第j行，第i个象素的指针
+			lpDst1 = lpNewDIBBits1 + lWidth * j + i;
+			// 指向缓存图像2倒数第j行，第i个象素的指针
+			lpDst2 = lpNewDIBBits2 + lWidth * j + i;
+			if (*lpDst2 > *lpDst1)
+				*lpDst1 = *lpDst2;
+		}
+	}
+	// 复制经过模板运算后的图像到源图像
+	memcpy(lpDIBBits, lpNewDIBBits1, lWidth * lHeight);
+	delete lpNewDIBBits2;
+	delete lpNewDIBBits1;
+	// 返回
+	return TRUE;
+}
+
+void CchenweicanImageView::OnEdgeSobel()
+{
+	// TODO: Add your command handler code here
+	CchenweicanImageDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	unsigned char* pBits = pDoc->m_pBits;
+	int nWidth = pDoc->imageWidth;
+	int nHeight = pDoc->imageHeight;
+	int nColorBits = pDoc->m_nColorBits;
+	if (nColorBits != 8)
+	{
+		// 提示用户
+		MessageBox(_T("目前只支持256级灰度图像的锐化！"), _T("系统提示"),MB_ICONINFORMATION | MB_OK);
+		return;
+	}
+	//Sobel边缘检测运算
+	// 调用SobelDIB()函数对DIB进行边缘检测
+	if (SobelDIB(pBits, nWidth, nHeight))
+	{
+		// 设置脏标记
+		pDoc->SetModifiedFlag(TRUE);
+		// 更新视图
+		pDoc->UpdateAllViews(NULL);
+	}
+	else
+	{
+		// 提示用户
+		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+	}
+	// 恢复光标
+	EndWaitCursor();
+}
+
+BOOL WINAPI PrewittDIB(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight)
+{
+	// 指向缓存图像的指针
+	unsigned char* lpDst1;
+	unsigned char* lpDst2;
+
+	unsigned char* lpNewDIBBits1;
+	unsigned char* lpNewDIBBits2;
+	int iTempH;
+	int iTempW;
+	// 模板系数
+	FLOAT fTempC;
+	int iTempMX;
+	int iTempMY;
+	FLOAT aTemplate[9]; //模板数组
+	lpNewDIBBits1 = new unsigned char[lWidth * lHeight]; // 暂时分配内存，以保存新图像
+	if (lpNewDIBBits1 == NULL)
+	{
+		// 分配内存失败
+		return FALSE;
+	}
+	lpNewDIBBits2 = new unsigned char[lWidth * lHeight]; // 暂时分配内存，以保存新图像
+	if (lpNewDIBBits2 == NULL)
+	{
+		// 分配内存失败
+		return FALSE;
+	}
+	// 拷贝源图像到缓存图像中
+	lpDst1 = lpNewDIBBits1;
+	memcpy(lpNewDIBBits1, lpDIBBits, lWidth * lHeight);
+	lpDst2 = lpNewDIBBits2;
+	memcpy(lpNewDIBBits2, lpDIBBits, lWidth * lHeight);
+	// 设置Prewitt模板参数
+	iTempW = 3;
+	iTempH = 3;
+	fTempC = 1.0;
+	iTempMX = 1;
+	iTempMY = 1;
+	aTemplate[0] = -1.0;
+	aTemplate[1] = -1.0;
+	aTemplate[2] = -1.0;
+	aTemplate[3] = 0.0;
+	aTemplate[4] = 0.0;
+	aTemplate[5] = 0.0;
+	aTemplate[6] = 1.0;
+	aTemplate[7] = 1.0;
+	aTemplate[8] = 1.0;
+	// 调用Template()函数
+	if (!Template(lpNewDIBBits1, lWidth, lHeight,iTempH, iTempW, iTempMX, iTempMY, aTemplate, fTempC))
+	{
+		return FALSE;
+	}
+	// 设置Prewitt模板参数
+	aTemplate[0] = 1.0;
+	aTemplate[1] = 0.0;
+	aTemplate[2] = -1.0;
+	aTemplate[3] = 1.0;
+	aTemplate[4] = 0.0;
+	aTemplate[5] = -1.0;
+	aTemplate[6] = 1.0;
+	aTemplate[7] = 0.0;
+	aTemplate[8] = -1.0;
+	// 调用Template()函数
+	if (!Template(lpNewDIBBits2, lWidth, lHeight,iTempH, iTempW, iTempMX, iTempMY, aTemplate, fTempC))
+	{
+		return FALSE;
+	}
+	//求两幅缓存图像的最大值
+	for (long j = 0; j < lHeight; j++)
+	{
+		for (long i = 0; i < lWidth - 1; i++)
+		{
+			// 指向缓存图像1倒数第j行，第i个象素的指针
+			lpDst1 = lpNewDIBBits1 + lWidth * j + i;
+			// 指向缓存图像2倒数第j行，第i个象素的指针
+			lpDst2 = lpNewDIBBits2 + lWidth * j + i;
+			if (*lpDst2 > *lpDst1)
+				*lpDst1 = *lpDst2;
+		}
+	}
+	// 复制经过模板运算后的图像到源图像
+	memcpy(lpDIBBits, lpNewDIBBits1, lWidth * lHeight);
+	// 释放内存
+	delete lpNewDIBBits2;
+	delete lpNewDIBBits1;
+	return TRUE;
+}
+
+void CchenweicanImageView::OnEdgePrewitt(){
+	// TODO: Add your command handler code here
+	CchenweicanImageDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	unsigned char* pBits = pDoc->m_pBits;
+	int nWidth = pDoc->imageWidth;
+	int nHeight = pDoc->imageHeight;
+	int nColorBits = pDoc->m_nColorBits;
+	if (nColorBits != 8)
+	{
+		MessageBox(_T("目前只支持256色位图的运算！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+		return;
+	}
+	// 调用PrewittDIB()函数对DIB进行边缘检测
+	if (PrewittDIB(pBits,nWidth, nHeight))
+	{
+		// 设置脏标记
+		pDoc->SetModifiedFlag(TRUE);
+		// 更新视图
+		pDoc->UpdateAllViews(NULL);
+	}
+	else
+	{
+		// 提示用户
+		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+	}
+	EndWaitCursor();
 }

@@ -105,13 +105,21 @@
 #define ID_IMAGE_TXPH                   32776
 #define ID_32777                        32777
 #define ID_IMAGE_MEDIAN                 32778
+#define ID_32779                        32779
+#define ID_ENHA_GRADSHARP               32780
+#define ID_32781                        32781
+#define ID_ENHA_SHARP                   32782
+#define ID_EDGE_SOBEL                   32783
+#define ID_32784                        32784
+#define ID_ENHA_PREWITT                 32785
+#define ID_EDGE_PREWITT                 32786
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        321
-#define _APS_NEXT_COMMAND_VALUE         32779
+#define _APS_NEXT_COMMAND_VALUE         32787
 #define _APS_NEXT_CONTROL_VALUE         1007
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

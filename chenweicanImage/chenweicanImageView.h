@@ -69,6 +69,7 @@ public:
 	afx_msg void OnEnhaSharp();
 	afx_msg void OnEdgeSobel();
 	afx_msg void OnEdgePrewitt();
+	afx_msg void OnInteequalize();
 };
 
 #ifndef _DEBUG  // debug version in chenweicanImageView.cpp

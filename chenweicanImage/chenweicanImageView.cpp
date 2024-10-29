@@ -49,6 +49,7 @@ BEGIN_MESSAGE_MAP(CchenweicanImageView, CScrollView)
 	ON_COMMAND(ID_ENHA_SHARP, &CchenweicanImageView::OnEnhaSharp)
 	ON_COMMAND(ID_EDGE_SOBEL, &CchenweicanImageView::OnEdgeSobel)
 	ON_COMMAND(ID_EDGE_PREWITT, &CchenweicanImageView::OnEdgePrewitt)
+	ON_COMMAND(ID_INTEEQUALIZE, &CchenweicanImageView::OnInteequalize)
 END_MESSAGE_MAP()
 
 // CchenweicanImageView construction/destruction
@@ -1089,8 +1090,7 @@ BOOL WINAPI PrewittDIB(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight)
 		return FALSE;
 	}
 	lpNewDIBBits2 = new unsigned char[lWidth * lHeight]; // 暂时分配内存，以保存新图像
-	if (lpNewDIBBits2 == NULL)
-	{
+	if (lpNewDIBBits2 == NULL){
 		// 分配内存失败
 		return FALSE;
 	}
@@ -1115,8 +1115,7 @@ BOOL WINAPI PrewittDIB(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight)
 	aTemplate[7] = 1.0;
 	aTemplate[8] = 1.0;
 	// 调用Template()函数
-	if (!Template(lpNewDIBBits1, lWidth, lHeight,iTempH, iTempW, iTempMX, iTempMY, aTemplate, fTempC))
-	{
+	if (!Template(lpNewDIBBits1, lWidth, lHeight,iTempH, iTempW, iTempMX, iTempMY, aTemplate, fTempC)){
 		return FALSE;
 	}
 	// 设置Prewitt模板参数
@@ -1178,6 +1177,66 @@ void CchenweicanImageView::OnEdgePrewitt(){
 	}
 	else
 	{
+		// 提示用户
+		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+	}
+	EndWaitCursor();
+}
+
+BOOL WINAPI InteEqualize(unsigned char* lpDIBBits, LONG lWidth, LONG lHeight) {
+	// 指向源图像的指针
+	unsigned char* lpSrc;
+
+	BYTE	bMap[256];
+	LONG	lCount[256];
+	// 图像每行的字节数
+	LONG	lLineBytes = (((lWidth * 8) + 31) / 32 * 4);
+
+	// 重置计数为0
+	for (LONG i = 0; i < 256; i++)
+		lCount[i] = 0;
+
+	// 计算各个灰度值的计数
+	for (LONG i = 0; i < lHeight; i++) {
+		for (LONG j = 0; j < lWidth; j++) {
+			lpSrc = (unsigned char*)lpDIBBits + lLineBytes * i + j;
+			lCount[*(lpSrc)]++;
+		}
+	}
+	// 计算灰度映射表
+	for (LONG i = 0; i < 256; i++) {
+		LONG lTemp = 0;
+		for (LONG j = 0; j <= i; j++)
+			lTemp += lCount[j];
+		bMap[i] = (BYTE)(lTemp * 255 / lHeight / lWidth);
+	}
+	for (LONG i = 0; i < lHeight; i++) {
+		for (LONG j = 0; j < lWidth; j++) {
+			lpSrc = (unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - i) + j;
+			*lpSrc = bMap[*lpSrc];
+		}
+	}
+	return TRUE;
+}
+
+void CchenweicanImageView::OnInteequalize(){
+	CchenweicanImageDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	unsigned char* pBits = pDoc->m_pBits;
+	int nWidth = pDoc->imageWidth;
+	int nHeight = pDoc->imageHeight;
+	int nColorBits = pDoc->m_nColorBits;
+	if (nColorBits != 8){
+		MessageBox(_T("目前只支持256色位图的运算！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
+		return;
+	}
+	if (InteEqualize(pBits, nWidth, nHeight)){
+		// 设置脏标记
+		pDoc->SetModifiedFlag(TRUE);
+		// 更新视图
+		pDoc->UpdateAllViews(NULL);
+	}
+	else{
 		// 提示用户
 		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
 	}

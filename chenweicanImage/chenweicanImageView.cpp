@@ -1311,6 +1311,56 @@ unsigned char WINAPI BilinearInterpolation(unsigned char* lpDIBBits, long lWidth
 		}
 	}
 }
+struct Color {
+	unsigned char r, g, b;
+};
+
+// Modified BilinearInterpolation for 24-bit color images
+Color WINAPI BilinearInterpolation1(unsigned char* lpDIBBits, long lWidth, long lHeight, float x, float y) {
+	LONG i1, i2, j1, j2;
+	Color f1, f2, f3, f4;
+	Color f12, f34;
+	FLOAT EXP = 0.0001f;
+	LONG lLineBytes = (((lWidth * 24) + 31) / 32 * 4);
+
+	i1 = (LONG)x;
+	i2 = i1 + 1;
+	j1 = (LONG)y;
+	j2 = j1 + 1;
+
+	if (x < 0 || x > lWidth - 1 || y < 0 || y > lHeight - 1)
+		return { 255, 255, 255 };
+
+	unsigned char* pPixel = lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i1 * 3;
+
+	auto getColor = [&](LONG i, LONG j) -> Color {
+		unsigned char* pixel = lpDIBBits + lLineBytes * (lHeight - 1 - j) + i * 3;
+		return { pixel[2], pixel[1], pixel[0] };
+		};
+
+	f1 = getColor(i1, j1);
+	f2 = getColor(i1, j2);
+	f3 = getColor(i2, j1);
+	f4 = getColor(i2, j2);
+
+	auto interpolate = [&](unsigned char c1, unsigned char c2, float t) {
+		return (unsigned char)(c1 + t * (c2 - c1));
+		};
+
+	f12.r = interpolate(f1.r, f2.r, x - i1);
+	f12.g = interpolate(f1.g, f2.g, x - i1);
+	f12.b = interpolate(f1.b, f2.b, x - i1);
+
+	f34.r = interpolate(f3.r, f4.r, x - i1);
+	f34.g = interpolate(f3.g, f4.g, x - i1);
+	f34.b = interpolate(f3.b, f4.b, x - i1);
+
+	return {
+		interpolate(f12.r, f34.r, y - j1),
+		interpolate(f12.g, f34.g, y - j1),
+		interpolate(f12.b, f34.b, y - j1)
+	};
+}
 
 void CchenweicanImageView::OnImageRotate(){
 	// TODO: Add your command handler code here
@@ -1355,41 +1405,79 @@ void CchenweicanImageView::OnImageRotate(){
 	LONG lNewHeight = (long)(std::max(fabs(fDstY4 - fDstY1), fabs(fDstY3 - fDstY2)) + 0.5);
 	float f1 = (float)(-0.5 * (lNewWidth - 1) * fCosa - 0.5 * (lNewHeight - 1) * fSina + 0.5 * (lWidth - 1));
 	float f2 = (float)(0.5 * (lNewWidth - 1) * fSina - 0.5 * (lNewHeight - 1) * fCosa + 0.5 * (lHeight - 1));
-	//使得每行字节数为4的倍数
-	LONG lLineBytes = (((lWidth * 8) + 31) / 32 * 4);//原来图像每行字节数
-	LONG lNewLineBytes = (((lNewWidth * 8) + 31) / 32 * 4);//新图像每行自字节数
 
-	unsigned char* lpNewDIBBits = new unsigned char[lNewLineBytes * lNewHeight];
 
-	for (LONG y = 0; y < lNewHeight; y++) { // 针对图像每行进行操作
-		for (LONG x = 0; x < lNewLineBytes; x++) { // 针对图像每列进行操作
-			//计算该像素在源图像中的坐标
-			LONG y0 = (-((float)x) * fSina + ((float)y) * fCosa + f2 + 0.5);
-			LONG x0 = (((float)x) * fCosa + ((float)y) * fSina + f1 + 0.5);
-			//判断是否在源图范围内
-			if ((x0 >= 0) && (x0 < lWidth) && (y0 >= 0) && (y0 < lHeight)) {
-				if (TRUE) //TRUE 用双线性插值 改成FALSE为邻近插值
-					// 利用双线性插值算法来计算象素值
-					*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = BilinearInterpolation(pDoc->m_pBits, lWidth, lHeight, x0, y0);
-				else
-					// 利用邻近插值算法来计算象素值
-					// 指向源DIB第y0行，第x0个象素的指针
-					*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = *(lpDIBBits + lLineBytes * (lHeight - 1 - y0) + x0);
-			}
-			else {
-				// 对于源图中没有的象素，直接赋值为255
-				*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = 255;
+	if (nColorBits == 8) {
+		//使得每行字节数为4的倍数
+		LONG lLineBytes = (((lWidth * 8) + 31) / 32 * 4);//原来图像每行字节数
+		LONG lNewLineBytes = (((lNewWidth * 8) + 31) / 32 * 4);//新图像每行自字节数
+
+		unsigned char* lpNewDIBBits = new unsigned char[lNewLineBytes * lNewHeight];
+
+		for (LONG y = 0; y < lNewHeight; y++) { // 针对图像每行进行操作
+			for (LONG x = 0; x < lNewLineBytes; x++) { // 针对图像每列进行操作
+				//计算该像素在源图像中的坐标
+				LONG y0 = (-((float)x) * fSina + ((float)y) * fCosa + f2 + 0.5);
+				LONG x0 = (((float)x) * fCosa + ((float)y) * fSina + f1 + 0.5);
+				//判断是否在源图范围内
+				if ((x0 >= 0) && (x0 < lWidth) && (y0 >= 0) && (y0 < lHeight)) {
+					if (TRUE) //TRUE 用双线性插值 改成FALSE为邻近插值
+						// 利用双线性插值算法来计算象素值
+						*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = BilinearInterpolation(pDoc->m_pBits, lWidth, lHeight, x0, y0);
+					else
+						// 利用邻近插值算法来计算象素值
+						// 指向源DIB第y0行，第x0个象素的指针
+						*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = *(lpDIBBits + lLineBytes * (lHeight - 1 - y0) + x0);
+				}
+				else {
+					// 对于源图中没有的象素，直接赋值为255
+					*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = 255;
+				}
 			}
 		}
+		//将内存解锁和将不再使用的内存释放， 将新图像设置为当前图像
+		delete pDoc->m_pBits;
+		pDoc->m_pBits = lpNewDIBBits;
+		pDoc->imageHeight = lNewHeight;
+		pDoc->imageWidth = lNewWidth;
+		pDoc->lpbmi->bmiHeader.biHeight = lNewHeight;
+		pDoc->lpbmi->bmiHeader.biWidth = lNewWidth;
+		pDoc->lpbmi->bmiHeader.biBitCount = pDoc->m_nColorBits;
 	}
+	else if (nColorBits == 24) {
+		LONG lLineBytes = (((lWidth * 8) + 31) / 32 * 4) * 3;//原来图像每行字节数
+		LONG lNewLineBytes = (((lNewWidth * 8) + 31) / 32 * 4) * 3; //新图像每行自字节数
 
-	//将内存解锁和将不再使用的内存释放， 将新图像设置为当前图像
-	delete pDoc->m_pBits;
-	pDoc->m_pBits = lpNewDIBBits;
-	pDoc->imageHeight = lNewHeight;
-	pDoc->imageWidth = lNewWidth;
-	pDoc->lpbmi->bmiHeader.biHeight = lNewHeight;
-	pDoc->lpbmi->bmiHeader.biWidth = lNewWidth;
-	pDoc->lpbmi->bmiHeader.biBitCount = pDoc->m_nColorBits;
+		unsigned char* lpNewDIBBits = new unsigned char[lNewLineBytes * lNewHeight];
+
+		for (LONG y = 0; y < lNewHeight; y++) { 
+			for (LONG x = 0; x < lNewLineBytes / 3; x++) {
+				//计算该像素在源图像中的坐标
+				LONG y0 = (-((float)x) * fSina + ((float)y) * fCosa + f2 + 0.5);
+				LONG x0 = (((float)x) * fCosa + ((float)y) * fSina + f1 + 0.5);
+				//判断是否在源图范围内
+				if (x0 >= 0 && x0 < lWidth && y0 >= 0 && y0 < lHeight) {
+					Color pixelColor = BilinearInterpolation1(lpDIBBits, lWidth, lHeight, x0, y0);
+					unsigned char* pDstPixel = lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x * 3;
+					pDstPixel[0] = pixelColor.b;
+					pDstPixel[1] = pixelColor.g;
+					pDstPixel[2] = pixelColor.r;
+				}
+				else {
+					unsigned char* pDstPixel = lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x * 3;
+					pDstPixel[0] = pDstPixel[1] = pDstPixel[2] = 255;
+				}
+			}
+		}
+		//将内存解锁和将不再使用的内存释放， 将新图像设置为当前图像
+		delete[] pDoc->m_pBits;
+		pDoc->m_pBits = lpNewDIBBits;
+		pDoc->imageHeight = lNewHeight;
+		pDoc->imageWidth = lNewWidth;
+		pDoc->lpbmi->bmiHeader.biHeight = lNewHeight;
+		pDoc->lpbmi->bmiHeader.biWidth = lNewWidth;
+		pDoc->lpbmi->bmiHeader.biBitCount = pDoc->m_nColorBits;
+	}
+	
 	Invalidate();
 }

@@ -87,6 +87,7 @@
 #define IDD_DIALOG_HISTOGRAM            310
 #define IDD_DIALOG_SMOOTH               315
 #define IDR_TOOLBAR1                    316
+#define IDD_DIALOG_CROTANGLE            321
 #define IDC_EDIT1                       1006
 #define IDC_EDIT2                       1007
 #define IDC_EDIT3                       1008
@@ -115,13 +116,15 @@
 #define ID_EDGE_PREWITT                 32786
 #define ID_32787                        32787
 #define ID_INTEEQUALIZE                 32788
+#define ID_32789                        32789
+#define ID_IMAGE_ROTATE                 32790
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        321
-#define _APS_NEXT_COMMAND_VALUE         32789
+#define _APS_NEXT_RESOURCE_VALUE        323
+#define _APS_NEXT_COMMAND_VALUE         32791
 #define _APS_NEXT_CONTROL_VALUE         1007
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

@@ -19,6 +19,10 @@
 
 #include <stdlib.h>
 
+#include "CRotateDlg.h"
+#include <cmath>
+#define M_PI 3.14159265358979323846
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -50,6 +54,7 @@ BEGIN_MESSAGE_MAP(CchenweicanImageView, CScrollView)
 	ON_COMMAND(ID_EDGE_SOBEL, &CchenweicanImageView::OnEdgeSobel)
 	ON_COMMAND(ID_EDGE_PREWITT, &CchenweicanImageView::OnEdgePrewitt)
 	ON_COMMAND(ID_INTEEQUALIZE, &CchenweicanImageView::OnInteequalize)
+	ON_COMMAND(ID_IMAGE_ROTATE, &CchenweicanImageView::OnImageRotate)
 END_MESSAGE_MAP()
 
 // CchenweicanImageView construction/destruction
@@ -486,8 +491,7 @@ void CchenweicanImageView::OnImageTxph()
 {
 	// TODO: Add your command handler code here
 	SmoothDlg sdlg;
-	if (sdlg.DoModal())
-	{
+	if (sdlg.DoModal()){
 		double H[3][3];//申明模板变量
 		double K = sdlg.m_nSmooth10;//H 与 K组合为8-领域平均法
 		H[0][0] = sdlg.m_nSmooth1;// 申明模板变量赋值
@@ -1241,4 +1245,151 @@ void CchenweicanImageView::OnInteequalize(){
 		MessageBox(_T("分配内存失败！"), _T("系统提示"), MB_ICONINFORMATION | MB_OK);
 	}
 	EndWaitCursor();
+}
+
+unsigned char WINAPI BilinearInterpolation(unsigned char* lpDIBBits, long lWidth, long lHeight, float x, float y){
+	//Add Code Here
+	// 四个最临近象素的坐标(i1, j1), (i2, j1), (i1, j2), (i2, j2)
+	LONG i1, i2;
+	LONG j1, j2;
+	// 四个最临近象素值
+	unsigned char f1, f2, f3, f4;
+	// 二个插值中间值
+	unsigned char f12, f34;
+	// 定义一个值，当象素坐标相差小于改值时认为坐标相同
+	FLOAT EXP;
+	// 图像每行的字节数
+	LONG lLineBytes;
+	// 计算图像每行的字节数
+	lLineBytes = (((lWidth * 8) + 31) / 32 * 4);
+	// 赋值
+	EXP = (FLOAT)0.0001;
+	// 计算四个最临近象素的坐标
+	i1 = (LONG)x;
+	i2 = i1 + 1;
+	j1 = (LONG)y;
+	j2 = j1 + 1;
+	// 根据不同情况分别处理
+	if ((x < 0) || (x > lWidth - 1) || (y < 0) || (y > lHeight - 1))
+		// 要计算的点不在源图范围内，直接返回255。
+		return 255;
+	else{
+		if (fabs(x - lWidth + 1) <= EXP){
+			// 要计算的点在图像右边缘上
+			if (fabs(y - lHeight + 1) <= EXP){
+				// 要计算的点正好是图像最右下角那一个象素，直接返回该点象素值
+				f1 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i1);
+				return f1;
+			}
+			else{
+				// 在图像右边缘上且不是最后一点，直接一次插值即可
+				f1 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i1);
+				f3 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i2);
+				// 返回插值结果
+				return ((unsigned char)(f1 + (y - j1) * (f3 - f1)));
+			}
+		}
+		else if (fabs(y - lHeight + 1) <= EXP){
+			// 要计算的点在图像下边缘上且不是最后一点，直接一次插值即可
+			f1 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i1);
+			f2 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j2) + i1);
+			// 返回插值结果
+			return ((unsigned char)(f1 + (x - i1) * (f2 - f1)));
+		}
+		else{
+			// 计算四个最临近象素值
+			f1 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i1);
+			f2 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j2) + i1);
+			f3 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j1) + i2);
+			f4 = *((unsigned char*)lpDIBBits + lLineBytes * (lHeight - 1 - j2) + i2);
+			// 插值1
+			f12 = (unsigned char)(f1 + (x - i1) * (f2 - f1));
+			// 插值2
+			f34 = (unsigned char)(f3 + (x - i1) * (f4 - f3));
+			// 插值3
+			return ((unsigned char)(f12 + (y - j1) * (f34 - f12)));
+		}
+	}
+}
+
+void CchenweicanImageView::OnImageRotate(){
+	// TODO: Add your command handler code here
+	CchenweicanImageDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	long lWidth = pDoc->imageWidth;
+	long lHeight = pDoc->imageHeight;
+	int nColorBits = pDoc->m_nColorBits;
+	//源图像指针
+	unsigned char* lpDIBBits = pDoc->m_pBits;
+
+	//调出角度输入对话框
+	CRotateDlg dlgpara;
+	dlgpara.m_fRotateAngle = 90.0;
+	if (!dlgpara.DoModal()) { return; }
+	double fRotateAngle = dlgpara.m_fRotateAngle;
+	double radians = fRotateAngle * (M_PI / 180.0);
+
+	// Calculate cosine and sine of the angle
+	double fCosa = cos(radians);
+	double fSina = sin(radians);
+
+	LONG fSrcX1 = 0;
+	LONG fSrcX2 = 0;
+	LONG fSrcX3 = lWidth;
+	LONG fSrcX4 = lWidth;
+	LONG fSrcY1 = 0;
+	LONG fSrcY2= lHeight;
+	LONG fSrcY3 = 0;
+	LONG fSrcY4 = lHeight;
+
+	LONG fDstX1 =  fCosa * fSrcX1 + fSina * fSrcY1;
+	LONG fDstY1 = -fSina * fSrcX1 + fCosa * fSrcY1;
+	LONG fDstX2 =  fCosa * fSrcX2 + fSina * fSrcY2;
+	LONG fDstY2 = -fSina * fSrcX2 + fCosa * fSrcY2;
+	LONG fDstX3 =  fCosa * fSrcX3 + fSina * fSrcY3;
+	LONG fDstY3 = -fSina * fSrcX3 + fCosa * fSrcY3;
+	LONG fDstX4 =  fCosa * fSrcX4 + fSina * fSrcY4;
+	LONG fDstY4 = -fSina * fSrcX4 + fCosa * fSrcY4;
+
+	LONG lNewWidth  = (long)(std::max(fabs(fDstX4 - fDstX1), fabs(fDstX3 - fDstX2)) + 0.5);
+	LONG lNewHeight = (long)(std::max(fabs(fDstY4 - fDstY1), fabs(fDstY3 - fDstY2)) + 0.5);
+	float f1 = (float)(-0.5 * (lNewWidth - 1) * fCosa - 0.5 * (lNewHeight - 1) * fSina + 0.5 * (lWidth - 1));
+	float f2 = (float)(0.5 * (lNewWidth - 1) * fSina - 0.5 * (lNewHeight - 1) * fCosa + 0.5 * (lHeight - 1));
+	//使得每行字节数为4的倍数
+	LONG lLineBytes = (((lWidth * 8) + 31) / 32 * 4);//原来图像每行字节数
+	LONG lNewLineBytes = (((lNewWidth * 8) + 31) / 32 * 4);//新图像每行自字节数
+
+	unsigned char* lpNewDIBBits = new unsigned char[lNewLineBytes * lNewHeight];
+
+	for (LONG y = 0; y < lNewHeight; y++) { // 针对图像每行进行操作
+		for (LONG x = 0; x < lNewLineBytes; x++) { // 针对图像每列进行操作
+			//计算该像素在源图像中的坐标
+			LONG y0 = (-((float)x) * fSina + ((float)y) * fCosa + f2 + 0.5);
+			LONG x0 = (((float)x) * fCosa + ((float)y) * fSina + f1 + 0.5);
+			//判断是否在源图范围内
+			if ((x0 >= 0) && (x0 < lWidth) && (y0 >= 0) && (y0 < lHeight)) {
+				if (TRUE) //TRUE 用双线性插值 改成FALSE为邻近插值
+					// 利用双线性插值算法来计算象素值
+					*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = BilinearInterpolation(pDoc->m_pBits, lWidth, lHeight, x0, y0);
+				else
+					// 利用邻近插值算法来计算象素值
+					// 指向源DIB第y0行，第x0个象素的指针
+					*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = *(lpDIBBits + lLineBytes * (lHeight - 1 - y0) + x0);
+			}
+			else {
+				// 对于源图中没有的象素，直接赋值为255
+				*(lpNewDIBBits + (lNewHeight - 1 - y) * lNewLineBytes + x) = 255;
+			}
+		}
+	}
+
+	//将内存解锁和将不再使用的内存释放， 将新图像设置为当前图像
+	delete pDoc->m_pBits;
+	pDoc->m_pBits = lpNewDIBBits;
+	pDoc->imageHeight = lNewHeight;
+	pDoc->imageWidth = lNewWidth;
+	pDoc->lpbmi->bmiHeader.biHeight = lNewHeight;
+	pDoc->lpbmi->bmiHeader.biWidth = lNewWidth;
+	pDoc->lpbmi->bmiHeader.biBitCount = pDoc->m_nColorBits;
+	Invalidate();
 }

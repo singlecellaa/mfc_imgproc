@@ -70,6 +70,7 @@ public:
 	afx_msg void OnEdgeSobel();
 	afx_msg void OnEdgePrewitt();
 	afx_msg void OnInteequalize();
+	afx_msg void OnImageRotate();
 };
 
 #ifndef _DEBUG  // debug version in chenweicanImageView.cpp

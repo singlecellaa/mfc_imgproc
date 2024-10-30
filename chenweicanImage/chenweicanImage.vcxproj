@@ -191,6 +191,7 @@
     <ClInclude Include="ChildFrm.h" />
     <ClInclude Include="CHistogramDisplay.h" />
     <ClInclude Include="ClassView.h" />
+    <ClInclude Include="CRotateDlg.h" />
     <ClInclude Include="FileView.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrm.h" />
@@ -209,6 +210,7 @@
     <ClCompile Include="ChildFrm.cpp" />
     <ClCompile Include="CHistogramDisplay.cpp" />
     <ClCompile Include="ClassView.cpp" />
+    <ClCompile Include="CRotateDlg.cpp" />
     <ClCompile Include="FileView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="OutputWnd.cpp" />
